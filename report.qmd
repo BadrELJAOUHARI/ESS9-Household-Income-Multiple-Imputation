@@ -1,0 +1,1093 @@
+---
+title: "Survey Analysis ESS Missing Data Imputation"
+author: ["Dieleman, Klaas", "El Jaouhari, Badr", "Lange, Fay de", "Mels, Ludo"]
+date: "2026-01-14"
+description: "Group assignment 3 for the course Survey Data Analysis in the master's track: Methodology and Statistics for the Behavioural, Biomedical and Social Sciences."
+note: "Recommended R version: 4.4.3 or higher"
+format: html
+toc: true
+---
+
+# Introduction
+This report examines item nonresponse in household income data from the European Social Survey (ESS) and creates a multiple imputation strategy to address these missing values. The report focuses on assessing how income may be meaningfully imputed in a cross-national, decile-based context, given the importance of income in socio-economic research and significant nonresponse in income across countries.
+
+The European Social Survey is a large, cross-national survey that is carried out every two years in more than 35 European countries (European Social Survey, 2019). The ESS was established in 2002 and has three main aims. The first one is to track and analyse shifting public attitudes and values within Europe and investigate how these interact with institutions in Europe. Second, it aims to develop, improve, and integrate cross-national survey measurement techniques throughout Europe. Lastly, it creates social indicators to aid in social science research, such as indicators of certain attitudes.
+
+A repeated cross-sectional design is used by the ESS. Their target population is all individuals in each participating country, aged 15 years old and over, who reside in private households, regardless of their nationality, citizenship or language (ESS Sampling and Weighting Expert Panel, 2022). Sampling frames may consist of either individuals, households, or addresses, depending on the availability of registers. Ultimately only one individual per household or address is selected for participation. Strict probability sampling is used such that every individual has a known, larger than zero, chance of being selected into the sample. Replacing non-responding individuals or households is not permitted, the same applies to volunteering and quota sampling. The ESS aims for a minimum target response of 70% which they try to establish by multiple contact attempts and follow ups. The aim for an ‘effective achieved sample size’ consists of 1500 individuals, or 800 if the country has a population of less than 2 million.
+
+The data itself is collected in person, using face-to-face interviews. There are strict guidelines for the translation of the survey to reduce measurement error and preserve cultural and linguistic equivalency. The survey consists of a core module and at least two ‘rotating’ modules, repeated at certain intervals.
+
+This report focuses on ESS Round 9 (2018/2019). In this round, over 30 countries were surveyed (European Social Survey, 2019). To track continuity and change in social variables, the core module collects information on, among other things, moral, political and social values; social and public trust; political interest and participation; social exclusion; and well-being. In addition to this, questions on demographics and socio-economic information are included, which can serve as predictors in analyses. One key variable is the household’s total net income, also called ‘`hinctnta`’, where respondents are asked to report a letter relating to the decile that best describes their total household’s income after tax and compulsory deductions. However, many respondents did not answer this question, resulting in substantial item nonresponse in many countries.
+
+## Non-response Imputation
+
+The aim of this report is to build and evaluate an imputation method to meaningfully replace the missing `hinctnta` values, measuring the total net household income in deciles. Before choosing an imputation approach, the missingness mechanism needs to be understood. Income nonresponse is rarely random and often related to other observed characteristics, such as age, education, employment, or cultural norms (Bollinger et al., 2019; Kim et al., 2007). Therefore, assuming that the data are missing completely at random (MCAR), is unrealistic (Little & Rubin, 2002). In fact, the missingness might even be partially missing not at random (MNAR), as it may depend directly on the variable itself, since for example, both very low- and very high-income earners systematically are more likely to refuse answering income questions (Bollinger et al., 2019). Although income nonresponse is plausibly partially MNAR, we apply multiple imputation (MI) under the missing at random assumption (MAR) and use strong predictors, so the assumption becomes plausible. This approach allows us to use strong observed predictors of income to estimate plausible values for missing income by preserving sample size and reducing bias due to observed characteristics (Rubin, 1987; Van Buuren, 2012). Multiple imputation assumes the missingness to be either ignorable (MCAR) or that the probability that a value that is missing depends on values of other observed variables (MAR) (Rubin, 1987). Whilst acknowledging that some bias may remain if missingness depends directly on unobserved income, conducting imputation for `hinctnta` per country and by North-South welfare regime division allows the imputation models to better capture how income is generated and reported in the different countries.
+
+Imputing missing income values for the `hinctnta` variable introduces some further challenges that will be discussed and analysed in this report as well. First, the variable is reported in country-specific deciles, meaning that the cut-offs vary between countries. Therefore, imputations will be performed separately per country and across the North-South welfare regime division to ensure the imputed values respect the national income distributions better and examine whether and how the income nonresponse varies across these different contexts Furthermore, as `hinctnta` is an ordinal variable, using the summary statistic such as the mean for pooling is inappropriate, as it relies on an interval-level measurement. The mode, which represents the income decile that is most commonly imputed, will be used. Rather than being a statistic for inference or assessment of the final dataset, it is employed during the imputation process as a descriptive tool to summarise imputed income deciles across imputations.  Lastly, the ESS provides multiple survey weights to produce representative results across countries. This report will evaluate the timing of when and whether these weights should be incorporated into the imputation process.
+
+# Theory
+
+## Country Selection
+
+### The challenge of cross-national income imputation
+
+In comparative survey research, household income is frequently the variable most susceptible to nonresponse, yet it remains a critical covariate for sociological analysis. The European Social Survey (ESS) variable hinctnta measures household net income in deciles. While this standardization facilitates some level of comparison, it presents a unique imputation challenge: income deciles are relative measures constructed at the national level. The economic reality of a "Decile 5" household in Northern Europe differs fundamentally from a "Decile 5" household in Southern Europe, not only in purchasing power but in the social structure of how that income is generated, and may also differs per country of the same group.
+
+Consequently, applying a pooled imputation model across all countries would likely introduce significant bias by ignoring cross-national heterogeneity in economic structures. To address this, we developed a stratified country selection strategy. Rather than selecting nations at random, we employed a theoretical sampling framework based on Gøsta Esping-Andersen’s (1990) typology of Welfare State Regimes (Esping-Andersen, 1990). This influential sociological theory classifies countries into distinct clusters based on how the state, market, and family interact to distribute resources and protect citizens from economic risks. By using this framework, we ensure that our analysis captures the structural differences in how households generate and report income across Europe. This will allow us to treat the imputation process not merely as a technical correction, but as a comparative study of how differing welfare models influence the "nature" of missing data.
+
+### The three worlds of welfare capitalism
+
+Our analysis contrasts two distinct European welfare models (excluding, for the time being, the "liberal" model exemplified by countries such as the US and Canada according to the author): the Universalist/Social Democratic model, primarily found in Northern Europe, and the Familial/Conservative model, characteristic of Southern Europe (Esping-Andersen, 1990). This selection allows us to benchmark our imputation results against established sociological literature regarding income inequality and state support.
+
+#### The Universalist / Social Democratic Regime (The North)
+
+The countries used in our model representing the Universalist or Social Democratic welfare regime of Northern Europe are Sweden (SE), Finland (FI), and the Netherlands (NL). Drawing on elements of both the Nordic and Corporatist models, these countries are characterized by high degrees of decommodification, where state provision of welfare is generous and universal. These economies feature highly formalised labour markets, high trust in government institutions, and generally lower levels of income inequality (Esping-Andersen, 1990).
+
+Within these high-trust environments, missing income data is unlikely to result from alienation or political distrust. Instead, we hypothesise that non-response is an artifact of privacy norms among the affluent, reinforced by deep-seated egalitarian cultural codes. A prime example is the Scandinavian concept of Jantelagen (The Law of Jante), a social norm that emphasizes collective conformity and stigmatises individual displays of success or superiority (Palamara, 2016). In such a cultural context, declaring a high income even in a survey can be viewed as breaking the taboo against "bragging". Consequently, missingness in these nations is likely Missing Not at Random (MNAR), driven primarily by high-net-worth individuals who view specific income figures as intrusive despite their participation in the rest of the survey.
+
+To validate this "Privacy of Affluence" hypothesis, we operationalize our investigation using three specific wealth indicators. First, using occupation (`isco08`), we anticipate higher non-response rates among Managers (Code 1) and Professionals (Code 2), whose compensation packages often include variable components that are both harder to quantify and more private than fixed wages. Also, we expect to see higher rates of missing income among respondents with high educational attainment (`edulvlb`). Second, we examine the main source of income (`hincsrca`), hypothesising that respondents relying on “investments, savings, insurance, or property” (Code 7) will exhibit significantly higher missingness than those earning standard "wages or salaries" (Code 1), identifying asset-based wealth as a uniquely sensitive data point. Finally, we utilise subjective economic comfort (`hincfel`) to test for a behavioural paradox: we expect that respondents who report "Living comfortably on present income" (Code 1) will be, counterintuitively, more likely to skip the specific income decile question. This pattern would confirm that non-response is a deliberate refusal based on privacy rather than a lack of knowledge.
+
+#### The Familial / Conservative Regime (The South)
+
+The countries used in our model representing the Familial/Conservative Regime in Southern Europe are Italy (IT) and Spain (ES). The Southern European model relies heavily on the family as the primary provider of social welfare (Ferrera, 1996). Income generation is often complex, involving multi-generational households pooling resources (pensions, wages, and transfers). Crucially, these economies are characterised by a larger informal economy (shadow labour market) compared to the North.
+
+We hypothesize that the mechanism of missingness here is structurally different and driven by complexity and caution. Complexity (Cognitive Burden): Calculating "Net Household Income" is difficult when multiple generations live together. We expect missingness to correlate with larger household sizes (variable `hhmmb`) and households with multiple income sources. Tax Sensitivity (The Informal Economy): Due to the prevalence of the shadow labor market, respondents may hide income out of fear of disclosure. Informal or "Other" Income Sources (`hincsrca`): We expect higher missingness among those whose main income source is listed as "Other" (Code 8). In the Southern familial model, this residual category often captures informal financial support (such as money from parents or unreported odd jobs) which respondents may be reluctant to formalize or genuinely unable to quantify compared to a standard wage.
+
+### Statistical Inclusion Criteria
+
+To ensure that our imputation models are statistically robust enough to capture these theoretical nuances, we applied strict inclusion criteria regarding data density and missingness rates.
+
+1.  Data Density (N \> 1,400): Effective Multiple Imputation by Chained Equations (MICE) requires sufficient observed data to "learn" the relationships between variables (Van Buuren & Groothuis-Oudshoorn, 2011). All selected countries meet this threshold:
+    1.  Italy: N = 2,745
+    2.  Sweden/Finland/Spain/Netherlands: All N \> 1,600.
+2.  Missingness Intensity (\> 5%): We excluded countries with lower missing data (e.g., Estonia at \~2%) as they do not provide a sufficient challenge for evaluation.
+    1.  Italy (44.4%): Serves as the "stress test" for our model. Recovering nearly half the dataset requires a highly predictive imputation model.
+    2.  Spain (27.8%): Represents a high-missingness baseline for the Southern model.
+    3.  Finland (6.9%) & Sweden (6.6%): Provide a control group. While missingness is lower, it remains above the 5% threshold, allowing us to compare how the quality of imputation differs between high-response (North) and low-response (South) environments.
+
+### Conclusion
+
+By selecting these five specific nations, we transform this assignment from a generic coding exercise into a rigorous comparative analysis. We postulate that a single, pooled imputation model cannot satisfy both the "Universalist" and "Familial" blocks simultaneously without washing out the unique socioeconomic signals of each region; therefore, we proceed with stratified imputation to respect region and country specific predictors of missingness.
+
+## Single vs. Multiple Imputation
+
+In surveys, missing data is common. A typical approach to deal with this is imputation, where the missing values are substituted with reasonable estimates for missing values (Rubin 1987; Rubin, 1988; Van Buuren, 2018). Single imputation (SI) substitutes one estimate for each missing variable, using techniques such as mean substitution, regression-based prediction (Rubin, 1987; Rubin, 1988), or hot-deck imputation, where the missing values are replaced with real, observed, values from other respondents (Madow et al., 1983). Whilst it results in a complete dataset, it was found that single imputation methods underestimate uncertainty, which potentially biases standard errors and confidence intervals (Rubin, 1987; Rubin, 1988; Little & Rubin, 2002).
+
+To address this, Rubin (1987; 1988) introduced multiple imputation (MI), which produces multiple reasonable values for each missing value (Van Buuren, 2018). Each set of imputed values then generates a full dataset, that can be analysed separately. These findings are then pooled across datasets to capture both the diversity within each dataset and the uncertainty between imputations (Rubin, 1987; Rubin, 1988; Schafer, 1997). By not being set as ‘best guesses’ but rather being treated as random variables that are derived from a probability distribution, this method is conceptually grounded in Bayesian inference (Rubin, 1987; Rubin, 1988; Van Buuren, 2018). Thus, whilst it still uses auxiliary information to impute missing values similar to single imputation, MI more accurately captures uncertainty resulting from the missing data.
+
+## Weighting
+
+As the European Social Survey is held in multiple countries using strict probability sampling, they provide weights to correct for unequal probabilities, unit nonresponse, and post-stratification adjustments. These weights are critical for producing representative estimates and valid standard errors across countries (ESS Sampling and Weighting Expert Panel, 2022). Consequently, imputing missing values of the household income variable`hinctnta`, a key methodological decision concerns whether survey weights should be implemented only during the final analysis or also during the imputation phase.
+
+Importantly, in both approaches considered here, survey weights will always be applied during final analysis. The distinction between the strategies is whether the survey weights are incorporated during the imputation phase. MI without survey weights serves as a baseline strategy, MI with weights expands on this method. The aim is to assess whether including weights into the imputation model of `hinctnta` (and including the survey weights during the final analysis) leads to substantively different results in comparison to imputing `hinctnta` without weights and only applying the survey weights during the analysis.
+
+### MI Without Weights
+
+MI without incorporating survey weights is the more traditional multiple imputation approach.  The imputation results in every observed case to contribute equally to the prediction of missing values, regardless of its selection probability. Survey weights will only be specified in the survey design, where they will be applied during the analysis stage. This strategy is widely used as it is easy to implement using standard multiple imputation software, such as MICE (Van Buuren & Groothuis-Oudshoorn, 2011). When the imputation models condition on a sufficient set of observed variables that explain both the missingness and the variable being imputed, proper valid inference can be obtained (Little & Rubin, 2002; Rubin, 1987; Van Buuren, 2018). However, disregarding weights during imputation may bias point estimates and understate uncertainty if people with higher or lower selection probability also exhibit systematic differences in their income reporting behaviour (Kim et al., 2006; Reiter et al., 2006; Zhou et al., 2016).
+
+### MI With Weights
+
+Multiple imputation including weights entails the approach of incorporating survey weights into the imputation model. Instead of only applying the weights at the analysis stage, this approach ensures that the final imputations represent the population structure suggested by the weights by influencing parameter estimation and donor value selection. Theoretically, the imputation model should be congenial with the analysis model, which means it should be compatible with the analysis model and reflect the relevant data-generating process of the target population (Meng, 1994; Rubin, 1987). If the missingness is related to the survey design features, hence the unequal selection probabilities, unit non-response, or uses stratification, the imputation model would no longer reflect the population structure from which the sample was drawn (Kim et al., 2006; Reiter et al., 2006; Zhou et al., 2016). Thus, ignoring these weights during the imputation might lead to biased, inconsistent estimates, as the imputed datasets no longer reflect the sampling structure of the population (Carpenter & Kenward, 2013; Kim et al., 2006; Reiter et al., 2006; Seaman et al., 2012).
+
+Zhou et al. (2015) came up with a two-step method to accommodate sampling weights into MI. In order to adjust for the unequal sampling probabilities, they first use the weights to create a synthetic target population via a weighted Bayesian bootstrap. As then the design has been accounted for, they apply ordinary MI to this synthetic population (without weights).
+
+Multilevel imputation using survey weights, which models the data-generating process hierarchically, is a different, more sophisticated approach that has been covered in the literature (Quartagno et al., 2020). In these methods, survey weights can be used to define strata that serve as approximate level two units. This allows the model to include random intercepts and, if desired, random covariance structures in the imputation model to reflect differences across strata. Despite their theoretical attractiveness, these models are computationally demanding and require greater knowledge for careful specification of the imputation model.
+
+Incorporating survey weights directly into the imputation algorithm, for instance by employing methods such as weighted regression models (Carpenter & Kenward, 2013; Gaffert et al., 2016) or weighted predictive mean matching (Robitzsch et al, 2021), might be a more useful method to put this weighted MI strategy into practice. In these instances, observations with higher weights contribute more strongly to parameter estimation in the regression-based model, or to donor selection in predictive mean matching. Compared to the unweighted sample distribution, this allows the imputation model to better reflect the population distribution. Including interaction terms between the weights and auxiliary variables can further improve the accuracy and efficiency of the imputation model (Carpenter & Kenward, 2013).
+
+All in all, an advantage of weighted MI is that the weighted imputed data resembles a more accurate representation of the population and reduced bias. Disadvantage includes an increased complexity of the model, making fitting the model more complex and where specialised software is needed.
+
+# Methods
+
+## Design
+
+This study will implement a 2 x 2 design to evaluate different methodological choices in imputing the missing household income values of the variable `hinctnta` in the ESS dataset. The design crosses two important dimensions of the imputation process: the number of imputations and the timing of accounting for sampling weights.
+
+The imputation process will begin with single imputation, where a single dataset will be created by imputing a single value for each missing income value. However, this approach can ignore imputation uncertainty and underestimate standard errors (Quartagno et al., 2020). Therefore, this will be followed by multiple imputation. Multiple imputation generates several completed datasets.
+
+For this study, 10 imputations will be performed. Studies have demonstrated that even a small number of imputations (three to five) may yield objective estimates (Rubin, 1987; Schafer & Olsen, 1998; Van Buuren, 2018). Nevertheless, the precision of standard errors, confidence intervals, and statistical power increases with the number of imputations, especially if the missingness is high (Graham et al., 2007; Royston, 2004, Van Buuren, 2018). The downside is that it involves more computation and storage. With moderate missingness, using 5 – 20 imputations causes not too much computation, whilst guaranteeing that the variance estimates are close enough to the ideal values and that the confidence intervals resulting from this are only slightly wider than would one do an infinite number of imputations (Van Buuren, 2018).
+
+The `hinctnta` variable is measured as an ordinal variable. Therefore, using the mean as a summary statistic of the imputations is not appropriate, as it relies on interval-scale assumptions, that do not apply to ordinal variables (Liddell & Kruschke, 2018). The statistic of interest in this research will be the mode, which reflects the most frequently imputed, and hence the most likely, income category. Using the mode, however, has some important implications for combining our results across the multiple imputed datasets.
+
+Rubin’s rules for pooling the estimates do not apply to statistics like the mode, but instead are derived for smooth or regular, normally distributed, estimates such as means, proportions and regression coefficients (Rubin, 1987; Rubin, 1988). This criterion is important since Rubin’s rules rely on linear approximations and the normality of the estimates to correctly combine the within- and between-imputation variances. As the mode does not contain these properties, Rubin’s rules to pool cannot be applied. In order to maintain complete variability across the imputations, the 10 imputed datasets are kept individually as a mids object. In addition, we provide a supplementary, descriptive pooled summary statistic, which is the mode across the imputations. This summary statistic is provided not by the MICE framework, nor does it follow Rubin’s rules for pooling datasets, but is included for interpretive purposes or for readers who wish these imputed values outside the MICE framework. In cases where there are numerous modes, the mode that is closest to the imputed values’ median is chosen. However, it should be mentioned that the existing imputation method is specifically designed for the household income variable `hinctnta` only. Consequently, general multivariate analyses involving multiply imputed variables should use the resulting mids object instead.
+
+Besides SI or MI, the timing of incorporating the survey weights will be evaluated. Weighting after imputation is used in all imputation cases and applies to the analysis stage, where weights will be included in the survey design specification. In addition, we will evaluate how weighting before imputation might influence the accuracy of the imputation. Here, the survey weights are incorporated directly into the imputation model, which ensures the imputed values reflect the population structure and unequal selection probabilities implied by the weights.
+
+## Procedure
+
+For the imputation itself, this study uses the Multiple Imputation by Chained Equations (MICE) framework to impute the missing values in the household income variable `hinctnta`, which is implemented using the R `mice` package (Van Buuren & Groothuis-Oudshoorn, 2011). In contrast to univariate imputation, where statistical estimates obtained from observed data of single variables are used to replace the missing values, the MICE algorithm offers a robust method of imputing values through iterative estimations based on conditional distributions. By estimating the missing data using the values of other variables, it takes dependencies between variables into consideration. It is useful as it can preserve the variability and relationships within the data, it examines the uncertainty associated with the missing data better, reducing bias, and it can be applied to continuous, categorical and mixed data.
+
+The selection of predictors for the imputation model is based empirical considerations. Predictors were selected based on their empirical correlation with `hinctnta`. A commonly used threshold for the inclusion of the predictors is to be correlated well with the variable of interest, which means the correlation should be moderate, and bigger than .30 (Cohen, 1988). Yet, this criterion resulted only in 3 predictors for both Spain and Italy. Multiple imputation works better when there are an adequate number of predictors included in the model to make the MAR assumption more plausible (Schafer, 1997). Therefore, it is decided to lower this threshold to .25, which resulted in 10 predictors for both Spain and Italy, 17 for Finland, and 18 for the Netherlands and Sweden.
+
+After selecting the predictors based on these empirical criteria, we will assess whether the predictors included in our imputation model aligned with the expected predictors based on the North/South welfare regime theoretical framework outlined above. This allowed us to assess the degree to which the actual associations in the data meet the theoretical expectations regarding income determinants. 
+
+Moreover, we manually removed all the predictors that showed high multicollinearity to avoid instability in the imputation models and specific design or control flow variables. These variables included `urban` (degree of urbanisation of the respondent’s domicile), `edulvlb` (respondent’s highest level of education, ES-ISCED, `edulvlfb` (father’s highest level of education, ES-ISCED), `edlvfeit` (partner’s highest level of education, ES-ISCED), `dweight` (design weight correcting for unequal selection probabilities), `pspwght` (post-stratification population weight), and `fvgabc` (a behavioural frequency indicator).
+
+Within the mice framework, predictive mean matching (PMM) is employed to impute the missing hinctnta values. PMM replaces missing values by drawing observed values from respondents with similar predicted values, thereby preserving the empirical distribution of the variable and avoiding implausible imputations (Van Buuren, 2018). This method is particularly suitable for the `hinctnta` income variable that is measured in country-specific deciles, as it draws observed donor values, which guarantees that the imputed values correspond to valid and observed income categories and avoids implausible values that are out of range.
+
+To allow for weighted imputations, the mice package will be extended with the `miceadds` package. The `miceadds` package provides specialised functions, such as multilevel (hierarchical) imputations or imputation using partial least squares, but most importantly for this research: it entails the imputation by weighted predictive mean matching using sampling weights (Robitzsch et al., 2021). This allows us to weight before imputation using the ‘`mice.impute.weighted.pmm`’ function within the `miceadds` package.
+
+Lastly, the specification of the sampling designs for each country. For Finland, Sweden and the Netherlands a single-stage random probability sample will be specified, and `anweight` was applied under the `weights` argument. The ESS provides multiple weights options: `dweight`, a design weight correcting for unequal selection probabilities; `pweight`, post-stratification weight correcting for differences between the sample and known distribution; and `anweight` combines both the design and post-stratification weights (Kaminska, 2020). By default, ESS recommends using the `anweight` in all analyses. For Spain and Italy, a clustered probability design was used (European Social Survey, 2019). In Spain, census blocks serve as the primary cluster, and secondary cluster are households within those census blocks. In Italy, municipalities serve as the primary cluster, grouped within domains. ESS provides a `psu` variable containing the clustering structure. Therefore, in the survey design specification for the `psu` variable is used to define clusters, and `anweight` is applied for the analysis. In the designs without clustering, this specification will not affect the results. The ESS provided `stratum` variable was applied under the `strata` argument to accommodate for explicit stratification. And to present the hierarchical sample structure and guarantee accurate variance estimates for clustered designs, primary sampling units were designated as nested inside strata (`nest = TRUE`).
+
+Finally, the finite population correction (fpc) will not be specified, as the samples of the country are small relative to the total populations. The fpc is calculated as $\sqrt{\left(N-n)/(N-1\right)}$, where $N$ is the population size and $n$ is the sample size. The sample size of the countries range between 1600 and 2800, whilst population sizes are in the millions. Thus, the calculations are extremely close to 1 and, thus, has a negligible effect on the estimated standard errors (Cochran, 1977). Therefore, it will not be specified in the survey design.
+
+## Comparison of Imputation Models
+To see how different levels of grouping affect the accuracy and consistency of income imputations, we adopt three approaches: models built separately for each country, models built for regional blocks (Northern and Southern Europe), and one model that pools all the selected countries together. Each approach reflects a different assumption about what determines a household income and its missingness mechanism.
+
+Country-specific imputation models assume that the relationship between income and its predictors is unique to each national context. However, it may lead to increased variability in imputed values, particularly in countries with high missingness rates or smaller effective sample sizes (Little & Rubin, 2019).
+
+Block-specific models pool countries into theoretically grounded regional groups based on the north vs south theory specified in the theoretical framework, allowing countries with similar welfare regimes and income structures to share information. We are expecting that, by using shared patterns from similar countries, block-level models may reduce imputation variance while still respecting structural differences between Northern and Southern Europe (Snijders & Bosker, 2012).
+
+Finally, the pooled model assumes that a single imputation process applies across all countries, conditional on observed covariates and country identifiers. This approach risks obscuring meaningful cross-national heterogeneity (Jowell et al., 2007). At the end, comparing these three models therefore allows us to empirically assess whether income nonresponse is best addressed at the national, regional, or supra-national level.
+
+## Evaluation Strategy
+### Stability Across Imputations
+Since the true values of missing income are unknown, we assess the quality of the imputations by looking at how stable the income distribution is, rather than prediction errors. For each imputation model, we compare how respondents are distributed across income deciles in the different ten imputed datasets.
+
+To measure stability, we compute the standard deviation of these proportions across the imputed datasets. This shows how much the income distribution changes because of randomness in the imputation process. A standard deviation close to zero means the model produces very similar distributions each time, which indicates a more robust and internally consistent imputation (Bodner, 2008).
+
+### Correcting Distributional Bias in Income Data
+As an additional validation step, we compare the marginal distributions of the income decile variable (`hinctnta`) across the selected countries before and after imputation. By definition, income deciles are constructed so that, in the target population, each category should include roughly 10% of households. Under ideal conditions (perfect measurement, no missing data, and fully representative samples) the distribution of `hinctnta` would therefore be close to uniform.
+
+In reality, the observed distributions differ from this ideal pattern in all selected countries. These differences can come from two main sources. First, sampling variability and remaining sampling bias can affect category proportions, even in high-quality surveys such as the ESS. Second, and more importantly for this study, income nonresponse is not random across households and tends to affect some income groups more than others, which distorts the observed distribution. To better understand these effects, we treat departures from the uniform distribution as a form of distributional bias, while assuming that the ESS sampling design is broadly representative of the target population. For each income category, we measure this bias as the absolute difference between the observed share and the theoretical benchmark of 10%. While some deviation is expected because of sampling error, consistent under- or over-representation of certain income groups points to bias caused by missing income data, especially households at the lower and upper ends of the income scale. As a result, it creates systematic distortions rather than mere random variation.
+
+By imputing missing income values with models that include strong socioeconomic predictors, we aim to reduce the part of distributional bias that is due to missing data, while leaving normal sampling variation unchanged. In this context, a successful imputation should bring the observed distribution of income deciles closer to uniformity, not because uniformity is artificially imposed, but because missing cases are reintroduced in a way that reflects their most likely position in the population.
+
+Crucially, we do not expect or require a perfectly uniform distribution after imputation. Instead, we assess whether imputation reduces the gap between the observed distribution and the theoretical benchmark compared to the situation before imputation. Any remaining differences are interpreted as residual sampling bias or random sampling variability, rather than as a failure of the imputation process.
+
+#### Chi-square tests
+To formally assess this distributional bias, Chi-square goodness-of-fit tests are used, which provide a measure for comparing the post-imputation income distribution to a reference distribution (Agresti, 2010). First, we will compare the imputed distribution to a uniform distribution, where each income decile is expected to obtain an equal proportion of observations. Thus, it will be a test to evaluate departures from uniformity.
+
+Second, the fully imputed data’s distribution will be compared to the sample distribution, making it possible to evaluate how closely the imputed data replicates the observed distribution of income deciles.
+
+The two reference distributions reflect different assumptions about the underlying income structure. The observed-sample benchmark reflects the distribution conditional on observed responses, which may itself be impacted by nonresponse, while the uniform benchmark represents a hypothetical, structure-free distribution. These two comparison tests offer extra information on how the imputation models preserve or alter the distributional properties after imputing the missing values.
+
+### Combining Stability and Bias for Model Evaluation
+
+By combining this uniformity-based assessment with the standard deviation of income category proportions across imputations, we evaluate imputation quality along two complementary dimensions. The first is stability, which captures values consistency across imputed datasets (how close is the standard deviation to zero). The second is bias reduction, which captures whether imputation corrects distortions caused by missing income and brings the distribution closer to the expected uniform population pattern. Taken together, these criteria allow us to distinguish between imputation models that simply replace missing values and those that meaningfully recover the intended population income distribution.
+
+# Results
+The empirical findings of the imputation analyses are shown in this section. In order to describe income nonresponse patterns and observed income distributions across nations, we start with exploratory studies. Next, we assess the performance of the different imputation strategies using a case study of the Netherlands, where we compare single versus multiple imputation and weighted versus unweighted techniques across several predictor specifications. Within-person stability, distributional bias in comparison to a uniform benchmark, and Chi-square tests against both uniform and actual income distributions in the same are used to evaluate the model’s performance.
+
+## Setup
+
+```{r setup}
+#| output: false
+
+library(tidyverse) # Data wrangling
+library(haven) # Importing .sav files
+library(survey) # Survey designs
+library(mice) # Imputing the data
+library(miceadds) # Imputing the data with weights
+library(future) # Support multi-core functions
+library(furrr) # Multi-core future wrapper for purrr
+library(knitr) # For creating nice, professional tables
+
+# Import data using haven (missings are automatically corrected)
+df_ess <- haven::read_dta("./ess/ESS9e02.dta")
+```
+
+## Data exploration and preparation
+
+```{r select_countries}
+# Inspect cases per country in the ESS data
+table(df_ess$cntry)
+
+# Select countries and models
+countries <- c("ES", "FI", "IT", "NL", "SE")
+model_names <- c("ALL", "NORTH", "SOUTH", countries)
+
+# Create separate datasets per region and selected countries
+df_subsets <- map(
+  model_names,
+  ~ {
+    if (.x == "ALL") {
+      df_ess |> filter(cntry %in% countries)
+    } else if (.x == "NORTH") {
+      df_ess |> filter(cntry %in% c("FI", "NL", "SE"))
+    } else if (.x == "SOUTH") {
+      df_ess |> filter(cntry %in% c("ES", "IT"))
+    } else {
+      df_ess |> filter(cntry == .x)
+    }
+  }
+) |>
+  set_names(model_names)
+
+# Create a list of survey designs
+designs <- map(
+  df_subsets,
+  ~ svydesign(
+    ids = ~psu,
+    strata = ~stratum,
+    weights = ~anweight ,
+    data = .x,
+    nest = TRUE # ensure unique cluster ids across strata
+  )
+)
+```
+
+```{r inspect_income_distributions}
+# Missingness percentages per dataset
+(missing_pct <- map_dbl(df_subsets, ~ round(mean(is.na(.x$hinctnta)) * 100, 1)))
+```
+Missingness in the `hinctnta` variable varies across countries. Italy and Spain show the highest percentages of missing values, with `r missing_pct["IT"]`% missing for Italy and `r missing_pct["ES"]`% for Spain. The Northern European countries show a lower missingness percentage (Sweden: `r missing_pct["SE"]`%; Finland: `r missing_pct["FI"]`%; and the Netherlands: `r missing_pct["NL"]`%). This pattern aligns with our theoretical expectations of regional differences in non-response.
+
+```{r}
+# Get income distributions per dataset
+(income_proportions <- map(
+  designs,
+  ~ round(prop.table(svytable(~hinctnta, design = .x)), 3)
+))
+```
+
+```{r}
+#| code-fold: true
+
+# Plot income distributions per dataset
+walk(
+  names(income_proportions),
+  ~ {
+    barplot(income_proportions[[.x]], main = .x)
+    abline(h = 0.1, col = "red")
+  }
+)
+```
+``` {r}
+#| echo: false
+
+# Helper function for getting a percentage from a proportion
+get_prop_pct <- function(model_name, decile) {
+  round(income_proportions[[model_name]][decile] * 100, 1)
+}
+```
+Examining the income distributions across all countries in the pooled dataset shows that the lowest and highest deciles are underrepresented (Decile 1: `r get_prop_pct("ALL", 1)`%; Decile 10: `r get_prop_pct("ALL", 10)`%) relative to the 10% per decile benchmark, whereas the middle deciles are slightly overrepresented. Furthermore, the Northern European block shows a light skew towards the right, where higher-income deciles are overrepresented relative to the 10% decile (Decile 7–10: `r get_prop_pct("NORTH", 7)`–`r get_prop_pct("NORTH", 10)`%), whilst the lower deciles are underrepresented. For the Southern block, deciles 2 – 4 are slightly overrepresented (Decile 2–4: `r get_prop_pct("SOUTH", 2)`–`r get_prop_pct("SOUTH", 4)`%), and the higher deciles are underrepresented (Decile 10: `r get_prop_pct("SOUTH", 10)`%). Finland shows the most uniform distribution among the countries, most closely aligning with the ideal decile proportions.
+
+## Predictors
+
+```{r predictors}
+#| warning: false
+
+# Find relevant predictors among numerical variables for all country
+# and region subsets
+predictors <- map(
+  df_subsets,
+  ~ {
+    numeric_vars <- select(.x, where(is.numeric)) # only numeric variables
+    correlations <- cor( # get correlations between each var and hinctna
+      numeric_vars$hinctnta,
+      numeric_vars,
+      use = "pairwise.complete.obs"
+    )
+    # get correlations between each var and missingness in hinctnta
+    corr_nonresponse <- cor(
+      is.na(numeric_vars$hinctnta),
+      numeric_vars,
+      use = "pairwise.complete.obs"
+    )
+
+    # collect all predictor candidates into a tibble
+    tibble(
+      var_name = colnames(correlations),
+      label = map_chr(numeric_vars, ~ attr(.x, "label")),
+      correlation = as.vector(correlations),
+      corr_nonresponse = as.vector(corr_nonresponse),
+      missingness = map_dbl(numeric_vars, ~ mean(is.na(.x)))
+    )
+  }
+)
+
+#  Check for redundant predictor variables:
+# - yrbrn because redundant with agea
+# - edulvlb because redundant with eisced
+# - edulvlfb because redundant with eiscedf
+# - edlvfeit because redundant with eiscedf
+(map(df_subsets, ~ cor(.x$yrbrn, .x$agea, use = "pairwise.complete.obs")))
+(map(df_subsets, ~ cor(.x$edulvlb, .x$eisced, use = "pairwise.complete.obs")))
+(map(df_subsets, ~ cor(.x$edulvlfb, .x$eiscedf, use = "pairwise.complete.obs")))
+(map(df_subsets, ~ cor(.x$edlvfeit, .x$eiscedf, use = "pairwise.complete.obs")))
+# mice automatically removes highly collinear predictors, but we are manually
+# removing these, based on theoretical prior knowledge
+
+# Unsuitable (design) variables to be excluded:
+# - dweight
+# - anweight
+# - pspwght
+# - fvgabc (filter variable)
+
+# List top predictors, based on low missingness and at least moderate
+# correlation with income variable
+# We use .25 as lower boundary, even though on Cohen's scale this is usually
+# seen as 'low', but we aimed to have an optimal number of predictors in each
+# dataset.
+predictors_top <- map(
+  predictors,
+  ~ .x |>
+    filter(abs(correlation) > .25, missingness < .1) |>
+    filter(var_name != "hinctnta") |>
+    # remove redundant and unsuitable variables as listed before
+    filter(
+      !var_name %in%
+        c(
+          "yrbrn",
+          "edulvlb",
+          "edulvlfb",
+          "edlvfeit",
+          "dweight",
+          "anweight",
+          "pspwght",
+          "fvgabc"
+        )
+    )
+)
+
+names_pred <- map(predictors_top, ~ .x$var_name)
+
+# Inspect the number of top predictors per dataset, so we can tweak the
+# correlation threshold until we have a good number of predictors for mice
+(n_pred <- map_int(predictors_top, nrow))
+
+# Datasets including the selected predictors, target variable, weights, and ID.
+# We use these reduced datasets in the imputation functions for increased
+# performance
+df_imputation_models <- map2(
+  df_subsets,
+  names_pred,
+  ~ {
+    .x |>
+      select(all_of(c("idno", .y, "hinctnta", "anweight"))) |>
+      mutate(across(everything(), as.numeric)) |>
+      mutate(hinctnta = as.integer(hinctnta))
+  }
+)
+```
+
+When we looked at our empirical results compared to the theoretical framework we built, we found some really striking alignments, and a few surprises that definitely challenge our initial assumptions. Here is how our North-South hypothesis held up once we actually ran the numbers.
+
+### Evaluation of the Northern Block (SE, FI, NL)
+
+**Hypothesis: The "Privacy of Affluence" (Jantelagen)**
+
+Our initial theory for the Northern block was largely validated by the correlation matrix. We hypothesized that in these high-trust, egalitarian societies, missingness wouldn’t be driven by political distrust, but rather by a cultural taboo against displaying wealth—what we referred to as *Jantelagen*.
+
+- **Affluence as a Predictor:** This holds up strongly. The "Feeling about household income" (`hincfel`) showed a powerful correlation of $-0.48$, confirming that those who report living comfortably are less likely to disclose their exact decile.
+- **Source of Wealth:** Our suspicion about asset-based wealth was also spot on. The "Main source of income" (`hincsrca`) was one of our strongest predictors ($r = -0.48$), supporting the idea that respondents with income from investments or savings are more private about their finances than those on a standard wage.
+- **Occupational Status:** We expected higher non-response among managers and professionals (`isco08`), and this variable indeed made our top list ($r = -0.33$), validating that higher-status roles correlate with missing income data in the North.
+
+Interestingly, **household size** (`hhmmb`) was a massive predictor in the North ($r = 0.46$), which we didn't explicitly emphasize in our Northern theory, but it suggests that larger households in these countries might have more complex, and thus less reported, income streams.
+
+### Evaluation of the Southern Block (IT, ES)
+
+**Hypothesis: Complexity & Tax Sensitivity**
+For the Southern block, our results were more of a "mixed bag". We theorized that missingness would be driven by the "Complexity" of multi-generational households and "Tax Sensitivity" due to the informal economy.
+ 
+- **Income Source Sensitivity:** We were correct that the "Main source of household income" (`hincsrca`) would be a relevant predictor ($r = -0.27$), which likely captures that reluctance to formalize "Other" or informal income sources we discussed.
+- **The "Complexity" Paradox:** This is where our hypothesis fell short. We expected household size (`hhmmb`) to be a major driver of non-response in the South due to the cognitive burden of pooling resources. However, `hhmmb` didn't even make the top 10 list for the South, despite being highly significant in the North. This suggests that the "Familial" model’s complexity might not be the primary reason Italians and Spaniards skip the income question.
+- **Subjective Comfort:** Similar to the North, `hincfel` was the strongest predictor in the South ($r = -0.53$). It seems that regardless of the welfare regime, how a respondent *feels* about their income is the most reliable indicator of whether they will report it.
+
+Overall, we can say our **Northern hypothesis holds strong**, while our **Southern hypothesis is only partially supported**.
+
+## Imputation
+
+```{r multicore setup}
+#| echo: false
+
+# Set up parallel processing to speed up imputations on multiple datasets.
+# Assign all available CPU cores but 1 to be used for parallel future_map.
+#
+# NOTE TO USER: hardcode num_cores to 1 in case you experience system
+# instability, or user map (and remove furrr_options) instead of future_map in
+# all below instances.
+num_cores <- parallel::detectCores() - 1
+plan(multisession, workers = num_cores)
+```
+
+```{r imputation functions}
+#| cache: true
+
+# This function runs a single or multiple imputation with mice,
+# including or excluding weights in the imputation process.
+# future_map is used to enable parallel imputation of multiple datasets,
+# future_mice is not used, because combining this with future_map causes
+# priority issues, and this is the better performing option when chosing between
+# the two possibilities.
+#
+# The return value is a list of mice-completed datasets
+parallel_impute <- function(
+  models, # a list of datasets to impute
+  weighted = FALSE, # whether to include weighting in the imputation itself
+  imp = 1, # the number of imputations
+  print_computation_time = FALSE # optional utility for performance benchmarking
+) {
+  start_time <- Sys.time()
+
+  mice_objects <- if (weighted) {
+    future_map(
+      models,
+      ~ {
+        meth <- make.method(.x) # extract the imputation methods per variable
+        meth[meth == "pmm"] <- "weighted.pmm" # overwrite them to use weighting
+        meth[c("anweight", "idno")] <- "" # don't impute these design variables
+
+        mice( # run mice with the given methods and number of imputations
+          .x,
+          method = meth,
+          print = FALSE,
+          m = imp,
+          maxit = 10,
+          weights = "anweight" # we use 'anweight' for the weighting factor
+        )
+      },
+      # this is needed for furrr to run stably
+      .options = furrr_options(seed = TRUE, packages = "miceadds")
+    )
+  } else {
+    # this is the simpler, unweighted variant
+    future_map(
+      models,
+      ~ {
+        data_no_weights <- .x |> select(-anweight)
+        meth <- make.method(data_no_weights)
+        meth["idno"] <- ""
+
+        mice(data_no_weights, method = meth, print = FALSE, m = imp, maxit = 10)
+      },
+      .options = furrr_options(seed = TRUE)
+    )
+  }
+
+  # get the current system time after imputation and print the delta since start
+  end_time <- Sys.time()
+  if (print_computation_time) {
+    print(paste(
+      "Computation time:",
+      round(difftime(end_time, start_time, units = "secs"), 2),
+      "seconds"
+    ))
+  }
+  
+  # return the list of full mice objects for each dataset
+  mice_objects
+}
+```
+
+### Single imputation without weighting
+
+```{r si_without_weighting}
+#| cache: true
+
+# run imputations and store the mice objects
+mice_objects_1_noweights <- parallel_impute(
+  df_imputation_models,
+  weighted = FALSE,
+  imp = 1
+)
+# store the completed datasets
+completed_1_noweights <- map(mice_objects_1_noweights, complete)
+```
+
+### Single imputation with weighting
+
+```{r si_with_weighting}
+#| cache: true
+
+# run imputations and store the mice objects
+mice_objects_1_weights <- parallel_impute(
+  df_imputation_models,
+  weighted = TRUE,
+  imp = 1
+)
+# store the completed datasets
+completed_1_weights <- map(mice_objects_1_weights, complete)
+```
+
+### Multiple imputation without weighting
+
+```{r mi_without_weighting}
+#| cache: true
+
+# run imputations and store the mice objects
+mice_objects_10_noweights <- parallel_impute(
+  df_imputation_models,
+  weighted = FALSE,
+  imp = 10
+)
+# store the completed datasets
+completed_10_noweights <- map(mice_objects_10_noweights, complete, action = "all")
+```
+
+### Multiple imputation with weighting
+
+```{r mi_with_weighting}
+#| cache: true
+
+# run imputations and store the mice objects
+mice_objects_10_weights <- parallel_impute(
+  df_imputation_models,
+  weighted = TRUE,
+  imp = 10
+)
+# store the completed datasets
+completed_10_weights <- map(mice_objects_10_weights, complete, action = "all")
+```
+
+## Pooled datasets
+### Helper functions
+
+```{r pooling_helpers}
+# This function applies a custom pooling algorithm to a set of multiply imputed
+# hinctnta values. For every record, it finds the modal values across all
+# imputations and, in case of multiple modes, takes the mode that is closest to
+# the median of the imputed values for this record.
+# 
+# The return value is a single dataset in the same form of the input datasets.
+get_pooled_imputations <- function(imputations) {
+  # combine all datasets into one and group the records by their id (idno var)
+  pooled_values <- list_rbind(imputations) |>
+    group_by(idno) |>
+    # get the median value for hinctnta per record and create a dataset with the
+    # frequencies per value of hinctnta
+    mutate(median = median(hinctnta)) |>
+    count(idno, hinctnta, median) |>
+    # group this dataset again and select only the modal values (max n)
+    group_by(idno) |>
+    filter(n == max(n)) |>
+    # keep only the single mode or take the one with the lowest distance to
+    # their median in case of mulitmodal
+    summarize(
+      hinctnta = if (n() == 1) {
+        hinctnta
+      } else {
+        hinctnta[which.min(abs(hinctnta - median))]
+      },
+      .groups = "drop"
+    )
+
+  # Return the first imputation dataset with pooled hinctnta values
+  imputations[[1]] |>
+    rows_update(pooled_values, by = "idno")
+}
+
+# This function applies imputed values for hinctnta from a collection of partial
+# datasets to the provided full dataset and returns the combined full dataset.
+combine_datasets <- function(orig_dataset, imputed_datasets) {
+  orig_dataset |>
+    rows_update(
+      list_rbind(imputed_datasets) |> select(idno, hinctnta),
+      by = "idno"
+    )
+}
+```
+
+### Pooling and combining
+```{r pooling_combining}
+# Pool both multiple imputation model datasets into one each
+completed_10_noweights_pooled <- map(
+  completed_10_noweights,
+  get_pooled_imputations
+)
+completed_10_weights_pooled <- map(
+  completed_10_weights,
+  get_pooled_imputations
+)
+
+# Create the list of final imputed datasets with the cross product
+# of all three predictor sets and the weighted/unweighted methods.
+df_ess_imputed <- list()
+
+# All three single imputed models without weighting
+df_ess_imputed$si_noweights_all <- combine_datasets(
+  df_subsets$ALL,
+  completed_1_noweights[c("ALL")]
+)
+df_ess_imputed$si_noweights_regions <- combine_datasets(
+  df_subsets$ALL,
+  completed_1_noweights[c("NORTH", "SOUTH")]
+)
+df_ess_imputed$si_noweights_countries <- combine_datasets(
+  df_subsets$ALL,
+  completed_1_noweights[countries]
+)
+
+# All three single imputed models with weighting
+df_ess_imputed$si_weights_all <- combine_datasets(
+  df_subsets$ALL,
+  completed_1_weights[c("ALL")]
+)
+df_ess_imputed$si_weights_regions <- combine_datasets(
+  df_subsets$ALL,
+  completed_1_weights[c("NORTH", "SOUTH")]
+)
+df_ess_imputed$si_weights_countries <- combine_datasets(
+  df_subsets$ALL,
+  completed_1_weights[countries]
+)
+
+# All three multiply imputed models without weighting
+df_ess_imputed$mi_noweights_all <- combine_datasets(
+  df_subsets$ALL,
+  completed_10_noweights_pooled[c("ALL")]
+)
+df_ess_imputed$mi_noweights_regions <- combine_datasets(
+  df_subsets$ALL,
+  completed_10_noweights_pooled[c("NORTH", "SOUTH")]
+)
+df_ess_imputed$mi_noweights_countries <- combine_datasets(
+  df_subsets$ALL,
+  completed_10_noweights_pooled[countries]
+)
+
+# All three multiply imputed models with weighting
+df_ess_imputed$mi_weights_all <- combine_datasets(
+  df_subsets$ALL,
+  completed_10_weights_pooled[c("ALL")]
+)
+df_ess_imputed$mi_weights_regions <- combine_datasets(
+  df_subsets$ALL,
+  completed_10_weights_pooled[c("NORTH", "SOUTH")]
+)
+df_ess_imputed$mi_weights_countries <- combine_datasets(
+  df_subsets$ALL,
+  completed_10_weights_pooled[countries]
+)
+```
+
+## Evaluation
+We evaluated the imputation models based on within-person stability, distributional bias (uniformity), and Chi-square goodness-of-fit tests. These metrics can be applied to all countries, but we focus on a case study to provide a manageable and interpretive comparison. For our case study, the Netherlands is chosen.
+
+For the Netherlands, we examined 12 imputed datasets derived from a combination of three sets of predictors and four imputation strategies. The predictors set include (1) a model with all predictors, selected across all countries; (2) a model with the regional, Northern, predictors, selected for the Northern countries; and (3) Netherlands-specific predictors, predictors selected specifically for the Netherlands. Each predictor is then combined with two single imputation models, with and without weights, and two multiple imputation models, with and without weights.
+
+```{r evaluation}
+# ---------------------------------------------------------
+# 1. HELPER FUNCTIONS
+# ---------------------------------------------------------
+
+# --- FUNCTION 1: STABILITY (Within-Person Variability) ---
+# Here we define our most critical check for the Multiple Imputation models.
+#
+# The Logic:
+# Instead of just checking if the population graph looks stable, we dig deeper.
+# We look at *each individual person* who had missing income.
+# Since we imputed their income 10 times, we have 10 different "guesses" for
+# them.
+#
+# - If the model guesses 5, 5, 6, 5, 5 -> The SD is low (Stable/Confident).
+# - If the model guesses 1, 9, 3, 8, 5 -> The SD is high (Unstable/Confused).
+#
+# We calculate this Standard Deviation (SD) for every single person, and then
+# take the average of all those SDs to get a single "Stability Score" for the
+# model.
+
+calc_stability <- function(list_of_dfs) {
+  # First, we combine all 10 imputed datasets into one big list.
+  # We keep the 'imp_id' so we know which imputation (1 through 10) the row came
+  # from.
+  bind_rows(list_of_dfs, .id = "imp_id") |>
+
+    # We ensure the income variable is numeric so we can calculate the SD.
+    mutate(hinctnta = as.numeric(hinctnta)) |>
+
+    # Now, we group by 'idno' (Respondent ID).
+    # This is key: we want to analyze the variation for EACH PERSON separately.
+    group_by(idno) |>
+
+    # Here we calculate the Standard Deviation of the 10 income guesses for this
+    # person.
+    summarise(
+      person_sd = sd(hinctnta, na.rm = TRUE),
+      .groups = "drop"
+    ) |>
+
+    # We filter out people who had an SD of 0.
+    # This removes people who were NOT missing (observed values never change)
+    # so we focus purely on the stability of our *imputations*.
+    filter(person_sd > 0) |>
+
+    # Finally, we calculate the average "confusion" (SD) across all imputed
+    # people. Lower Average SD = A more stable, confident model.
+    summarise(
+      avg_person_sd = mean(person_sd, na.rm = TRUE),
+      median_person_sd = median(person_sd, na.rm = TRUE)
+    )
+}
+
+# --- FUNCTION 2: DISTRIBUTIONAL BIAS (Uniformity) ---
+# Here we calculate the "Distributional Bias".
+# Theoretically, each income decile should contain exactly 10% of the population
+# We measure how far our final imputed dataset deviates from this 10% ideal.
+# This helps us see if we corrected the "Missing Not At Random" (MNAR) issue.
+calc_uniformity_bias <- function(df) {
+  df |>
+    count(hinctnta) |>
+    mutate(
+      observed_prop = n / sum(n), # What % did we actually get?
+      theoretical_prop = 0.1, # What % should it be? (10%)
+      # The distance between reality and theory:
+      bias_absolute = abs(observed_prop - theoretical_prop)
+    )
+}
+
+# --- FUNCTION 3: CHI-SQUARE TESTS ---
+# Here we run two statistical tests to validate our results.
+#
+# Test 1 (vs_Uniform): Did we flatten the curve?
+# - A high p-value here is good (means we are close to uniform).
+#
+# Test 2 (vs_Original): Did we just copy the biased sample?
+# - A low p-value here is good (means we significantly changed the distribution)
+calc_chisq <- function(df_imputed, df_original) {
+  # We count the frequencies in our imputed data
+  obs_counts <- table(factor(df_imputed$hinctnta, levels = 1:10))
+
+  # We get the probabilities from the original (biased) sample to compare
+  # against
+  orig_counts <- table(factor(df_original$hinctnta, levels = 1:10))
+  orig_probs <- orig_counts / sum(orig_counts)
+
+  # Test 1: Compare against Ideal Uniform
+  test_uniform <- chisq.test(obs_counts, p = rep(0.1, 10))
+
+  # Test 2: Compare against Original Sample
+  test_sample <- chisq.test(obs_counts, p = orig_probs)
+
+  # Return the results in a tidy table
+  tibble(
+    test = c("vs_Uniform", "vs_Original"),
+    statistic = c(test_uniform$statistic, test_sample$statistic),
+    p_value = c(test_uniform$p.value, test_sample$p.value)
+  )
+}
+
+# ---------------------------------------------------------
+# 2. COMPARISON STUDY: The Netherlands (NL) Case
+# ---------------------------------------------------------
+
+# We initialize empty lists to store our results as we loop through the models
+results_stability <- list()
+results_bias <- list()
+results_chisq <- list()
+
+# We set our target country to the Netherlands (NL)
+target_country <- "NL"
+
+# Now we get the baseline original data for NL to use for comparisons
+df_orig_nl <- df_subsets$ALL |> filter(cntry == target_country)
+
+# --- THE MAIN LOOP ---
+# We iterate through every imputed dataset (e.g., "si_noweights_all",
+# "mi_weights_regions") that exists in our 'df_ess_imputed' list.
+for (key in names(df_ess_imputed)) {
+  # --- Step A: Get the Pooled Data ---
+  # We grab the single completed dataframe for this method.
+  # Since 'df_ess_imputed' already has the 'cntry' column, we can filter
+  # directly!
+  df_pooled_nl <- df_ess_imputed[[key]] |>
+    filter(cntry == target_country)
+
+  # We extract the method details from the name string for labeling later.
+  parts <- str_split(key, "_")[[1]]
+  method_name <- paste(parts[1], parts[2], sep = "_") # e.g. "mi_weights"
+  level_name <- parts[3] # e.g. "regions"
+
+  # --- Step B: Run Bias & Chi-Square Checks ---
+  # These checks run on the single, final dataset we just grabbed.
+
+  results_bias[[key]] <- calc_uniformity_bias(df_pooled_nl) |>
+    mutate(method = method_name, level = level_name)
+
+  results_chisq[[key]] <- calc_chisq(df_pooled_nl, df_orig_nl) |>
+    mutate(method = method_name, level = level_name)
+
+  # --- Step C: Run Stability Check (MI Only) ---
+  # If this is a Multiple Imputation (MI) model, we have to do extra work.
+  # We can't use the single pooled dataset for stability—we need the 10 raw
+  # variations!
+
+  if (str_starts(key, "mi")) {
+    # 1. Locate the Raw Imputation List
+    # We check if we should look in the "noweights" or "weights" object list.
+    raw_obj <- if (str_detect(key, "noweights")) {
+      completed_10_noweights
+    } else {
+      completed_10_weights
+    }
+
+    # 2. Locate the correct Model Key
+    # We map our loop name ("regions") back to the internal list name ("NORTH").
+    raw_key <- case_when(
+      level_name == "all" ~ "ALL",
+      level_name == "regions" ~ "NORTH", # NL is in the North block
+      level_name == "countries" ~ "NL"
+    )
+
+    # 3. FIX THE MISSING COUNTRY COLUMN
+    # The raw imputation lists DO NOT have the 'cntry' column (we removed it
+    # earlier). So we can't filter for "NL" directly.
+    #
+    # The Solution:
+    # We borrow the 'cntry' column from the original dataset (df_subsets)
+    # because the row order is identical.
+    country_col <- df_subsets[[raw_key]]$cntry
+
+    # We map over the 10 datasets, gluing the 'cntry' column back onto each one,
+    # and THEN we filter for the Netherlands.
+    raw_list_nl <- map(raw_obj[[raw_key]], function(df) {
+      df |>
+        mutate(cntry = country_col) |> # Glue the column back on
+        filter(cntry == target_country) # Now we can filter safely!
+    })
+
+    # 4. Calculate Stability
+    # Now that we have the 10 raw datasets for NL, we calculate the per-person
+    # SD.
+    results_stability[[key]] <- calc_stability(raw_list_nl) |>
+      mutate(method = method_name, level = level_name)
+  }
+}
+
+# ---------------------------------------------------------
+# 3. PRETTY OUTPUTS & VISUALIZATIONS
+# ---------------------------------------------------------
+
+# We combine all the individual results into big, clean summary tables
+df_stability_results <- bind_rows(results_stability)
+df_bias_results <- bind_rows(results_bias)
+df_chisq_results <- bind_rows(results_chisq)
+
+# --- A. Stability Table ---
+# We verify: Which model had the lowest variance per person?
+stability_summary <- df_stability_results |>
+  group_by(method, level) |>
+  summarise(
+    avg_sd = mean(avg_person_sd), # Average SD per person
+    median_sd = mean(median_person_sd), # Median SD (robust to outliers)
+    .groups = "drop"
+  ) |>
+  arrange(avg_sd)
+```
+```{r}
+#| code-fold: true
+kable(
+  stability_summary,
+  caption = "Average Prediction Instability (SD per Person). Lower is Better.",
+  digits = 4
+)
+```
+```{r}
+#| echo: false
+# Helper function for extracting stability scores for in the markdown
+get_stability_sd <- function(method_key, level_key) {
+  val <- stability_summary$avg_sd[
+    stability_summary$method == method_key &
+      stability_summary$level == level_key
+  ]
+  round(val, 3)
+}
+```
+### Stability across imputations
+Within-person stability measures the consistency of multiple imputations missing `hinctnta` values for the same individual across 10 multiple imputations. Lower SD values indicate higher stability and more confident imputation, whereas higher SD values indicate greater uncertainty.
+
+The results show that the multiple imputation models without weighting achieved the lowest within-person variability, especially at the regional level (SD = `r get_stability_sd("mi_noweights", "regions")`). This suggests these models produced the most consistent predictions for missing income values. Furthermore, the multiple imputed weighted models show consistently higher standard deviation values (for regional SD = `r get_stability_sd("mi_weights", "regions")`) in comparison to non-weighted models, indicating that weighted imputation models using survey weights slightly increase uncertainty in individual-level predictions. Stability was generally higher for the multiple imputation models (weights or no weights) that included region-specific predictors than country-specific predictors. Overall, multiple imputation without weighting offered the most consistently imputed values at the individual level.
+
+```{r}
+# --- B. Bias Visualization ---
+# We verify: Which model produced a distribution closest to the 10% theoretical
+# flat line?
+bias_summary <- df_bias_results |>
+  group_by(method, level) |>
+  summarise(total_bias = sum(bias_absolute), .groups = "drop") |>
+  arrange(total_bias)
+```
+```{r}
+#| code-fold: TRUE
+kable(
+  bias_summary,
+  caption = "Total Distributional Bias (Uniformity)",
+  digits = 4
+)
+```
+### Distributional bias
+The distributional bias assesses how closely the imputed income data approximate the ideal uniform distribution across income deciles (where each decile represents 10% of the respondents). The total absolute deviation from this ideal was calculated for each dataset.
+
+Overall, the single imputation models exhibited lower distributional bias then the multiple imputation models. The model that performed best was the single imputation model with weights including country level predictors (total bias = 0.2777) and thus, most closely approximate the theoretical uniform distribution.
+
+Among the unweighted multiple imputation models, the predictor choice affected the distributional bias modestly. From the three unweighted MI models, the one including region-specific predictors had the lowest total bias (0.3063). In contrast, the models using country-specific predictors had a higher total bias (0.3222), also compared to the all-country models (0.3138).
+
+Including weights into the imputation model generally reduced the total bias, except for the models using region specific predictors. For example, the model using country specific predictors, the bias reduced to 0.3126 (compared to 0.3222), whilst for the regional models, the bias increased slightly in the weighted models to 0.3126 (compared to 0.3063). 
+
+```{r}
+# Let's plot this! A smaller bar means less bias.
+plot_bias <- ggplot(
+  bias_summary,
+  aes(
+    x = reorder(interaction(method, level), total_bias),
+    y = total_bias,
+    fill = level
+  )
+) +
+  geom_col() +
+  coord_flip() +
+  theme_minimal() +
+  labs(title = "Total Distributional Bias", y = "Bias Score", x = "Strategy")
+
+print(plot_bias)
+```
+### Chi-square
+We used Chi-square goodness-of-fit tests against two reference distributions to assess how the imputed datasets maintain or change the income distribution: (1) a uniform distribution, in which 10% of respondents are expected to fall into each income decile, and (2) the original Netherlands sample, which represents the observed distribution. Greater divergence is indicated by lower p-values, whilst higher p-values show closer conformity with the reference distribution.
+```{r chi_square vs uniform}
+# --- C. Chi-Square Tables ---
+# Check imputation against uniform
+chisq_uniform_clean <- df_chisq_results |>
+  filter(test == "vs_Uniform") |>
+  select(method, level, statistic, p_value) |>
+  arrange(desc(p_value))
+
+kable(
+  chisq_uniform_clean,
+  caption = "Chi-Square Test vs Uniform Distribution",
+  digits = 4
+)
+```
+#### Comparison to a uniform distribution
+The results show that all imputation models deviate strongly from a perfect uniform distribution, as all p-values approach zero. Among the SI models, the weighted SI model using region-specific predictors show the lowest total Chi-square statistic ($\chi^2 = 172.433, p ≈ 0$), producing a distribution slightly closer to a uniform distribution compared to the other models.
+
+The multiple imputation models show higher Chi-square statistics. Among the unweighted imputation models, the lowest statistic is produced by the MI model using regional predictors ($\chi^2 = 198.710$), and thus, across the three models, relatively showed the most alignment with a uniform distribution.
+
+Including weights in the MI models generally increased the Chi-square statistic, increasing deviation from a uniform distribution except for the MI model using all-country predictors, where including weights reduced it ($\chi^2 = 189.684$ in comparison to $\chi^2 = 206.133$).
+``` {r chi_square vs sample}
+# We check: Did we just reproduce the original bias?
+chisq_original_clean <- df_chisq_results |>
+  filter(test == "vs_Original") |>
+  select(method, level, statistic, p_value) |>
+  arrange(desc(p_value))
+
+kable(
+  chisq_original_clean,
+  caption = "Chi-Square Test vs Original Sample",
+  digits = 4
+)
+```
+#### Comparison to observed Netherlands sample distribution
+The single imputation models reproduced the observed Netherlands sample distribution the best, where the unweighted single imputation model using regional predictors showed the greatest alignment ($p = 0.959$).
+
+The results for the unweighted multiple imputation models showed for the model including country predictors the highest p-value and thus, greatest alignment with the observed distribution ($p = 0.375$). Especially the MI model using region-specific predictors showed the worst alignment with the observed distribution ($p = 2452$).
+
+Adding weights to the imputation model greatly improved the alignment for the country-specific predictor multiple imputation model, where the $p$-value increased to $0.7333$ (in comparison to $0.375$). For both imputation models using all-country predictors or region specific predictors, weighting reduced p-value, reducing the alignment with the observed sample distribution.
+
+Across these evaluation metrics, there is a trade-off between individual-level stability, reflecting a uniform benchmark, and preserving the observed income distribution of the Netherlands. The most stable imputations are produced by unweighted multiple imputation (MI) models, especially those that include region-specific variables. On the other hand, single imputation (SI) models show the least amount of distributional bias in comparison to a uniform benchmark and best replicate the observed income distribution in the Netherlands. In general, adding weights to MI models improves alignment with the actual distribution for country-specific variables while increasing individual-level variability and overall bias for region-specific predictors. 
+
+```{r export}
+# ---------------------------------------------------------
+# 4. EXPORT RESULTS
+# ---------------------------------------------------------
+
+# We create an output folder if it doesn't exist to keep things organized
+if (!dir.exists("output")) {
+  dir.create("output")
+}
+
+# We save our tables to CSV files
+write_csv(stability_summary, "output/eval_stability.csv")
+write_csv(bias_summary, "output/eval_bias.csv")
+write_csv(chisq_uniform_clean, "output/eval_chisq_uniform.csv")
+write_csv(chisq_original_clean, "output/eval_chisq_original.csv")
+
+# We save the bias plot as an image
+ggsave("output/eval_bias_plot.png", plot_bias, width = 8, height = 6)
+```
+
+# Conclusion and Discussion
+In this report, we developed and evaluated multiple imputation strategies for the missing household income `hinctnta` values of the European Social Survey round 9. Using a theoretical framework consisting of a North/South European welfare regime distinction (Esping-Anderson, 1990), we compared country-specific, region-specific (North/South), and all-country pooled imputation models. We implemented single and multiple imputation models using MICE and evaluated incorporating survey weights during imputation.
+Our findings show a complex trade-off between how well the distributions aligned the reference distributions and individual-level stability. The most stable imputations with the least amount of within-person variability were generated by multiple imputation models without weighting, especially those that included region-specific variables. Higher-weighted respondents may have a disproportionate impact on imputed values, raising uncertainty at the individual level, according to weighted multiple imputation models.
+
+Our results also confirm that Esping-Andersen’s welfare regimes theory (Esping-Anderson, 1990) can explain to an extent how respondents hide income data. In the North, our hypothesis held because high-trust, egalitarian societies create a specific "Privacy of Affluence" (Palamara, 2016). Non-response here is a predictable, strategic choice made by wealthy individuals and asset-holders who wish to avoid standing out. In contrast, our Southern hypothesis failed because the "Complexity" of large households did not actually trigger missingness. Instead, the South functions as a theoretical "black box" where non-response is likely not a demographic trait.
+
+Single imputation models often fared the best when assessing alignment with the distributions, exhibiting the least amount of uniform distributional bias and the closest resemblance to the Netherlands' observed income distribution. The most stable imputations at the individual level, on the other hand, were generated by multiple imputation models, especially those without weighting and with region-specific predictors, which reflected the uncertainty in missing values across imputations. Whilst region-specific predictors minimised deviation from uniformity across unweighted multiple imputation models, adding weights had conflicting impacts, increasing bias for region-specific models while enhancing alignment for all-country models. For the alignment with the observed sample distribution, the multiple imputation models including country-specific predictors showed the greatest alignment, which increased substantially after adding weights. These findings demonstrate the various functions of single and multiple imputation: multiple imputation better captures individual-level variability, whereas single imputation better retains marginal distributions.
+
+Overall, these chi-square tests against both the uniform and observed distributions  showed the  trade-off between imputing "ideal" unbiased deciles and maintaining the real income patterns in the Netherlands. While models that are in line with the actual distribution naturally depart from uniformity, models that are closer to a uniform distribution have a tendency to skew the observed data. This further shows that in our data uniformity and faithfulness to the observed distribution cannot be fully optimised by a single imputation technique.
+
+These results also provide light on how weighting functions in imputation. Based on the literature, we expected that incorporating survey weights during imputation would improve alignment with population distributions and reduce bias (Carpenter & Kenward, 2013; Kim et al., 2006; Meng, 1994; Reiter et al., 2006; Rubin, 1987; Seaman et al., 2012; Zhou et al., 2016). However, in practice, the results for the weighted imputation models were mixed. Our findings demonstrate that adding weights can increase uncertainty for multiple imputation models and does not always reduce bias in comparison to a uniform benchmark or improves alignment with the observed sample, except for the country-specific predictors multiple imputation models. The results show how complex including weights in the imputation model can be and that their use might be better guided by a specific analytic objective.
+
+In summary, no imputation technique predominates across all evaluation criteria. Theoretically informed predictor selection can still be essential, single imputation models best resemble both uniform and observed distributions, and multiple imputation models without weights maximise stability.
+
+## Limitations and Recommendations
+The main challenge that we faced when choosing the most reliable imputation strategy was a hypothesized rather high proportion of MNAR, explaining missingness on the `hinctnta` variable. Household income itself can be a factor in the willingness to disclose this, especially in the higher and lower income levels, for different reasons, as explained in the [country selection section](#country-selection). Therefore, since multiple imputation can create a strong predictor model from a dataset when MAR is assumed, our prediction models were not expected to be very strong. Our expectations for that part were confirmed by a seemingly rather random ranking order of 'best' models. The Chi-square tests show that all of them are very far off the theoretical uniform distribution, which can be explained by the low proportion of MAR that the models could impute from the data.
+
+Another difficulty was explaining the deviation from the theoretical uniform population distribution. As explained, part of it can be attributed to skewed missingness explained by covariates (MAR) and the outcome variable itself (MNAR). But part of the deviation from uniform distribution must be attributed to sampling error in the ESS dataset. Looking at the sample distributions per country individually, the pattern reveals that the deviation cannot be fully explained by sampling error, because then we would see more random distribution patterns across different countries, but it is impossible to determine the exact influence of sampling error in the distribution of the household income variable. This limitation makes it difficult to set a goal or benchmark distribution to base our imputation evaluation upon.
+
+Moreover, while we successfully identified regional differences—such as occupation (`isco08`) being a key predictor only in the North—the data shows that the "Privacy of Affluence" may be a more universal driver of missingness than we initially thought. The failure of household size to predict missingness in the South suggests we might need to rethink our initial theory and perhaps focus more on general socioeconomic indicators like education (`eduyrs`) and labor status (`pdwrk`), which were prominent in both regions. Ultimately, our decision to lower the correlation threshold to $0.25$ was essential. Without it, we would have missed several of these theoretically relevant predictors, particularly in the Southern block where the signals were less clear than in the North.
+
+Our imputation also used a mode-based pooling approach. Whilst using the mode preserves the ordinal and categorical nature of the income variable, it does not fully propagate imputation uncertainty in the way Rubin’s rules do for continuous or regular estimates (Rubin, 1987; 1988). As a consequence, standard errors, confidence intervals, and inferential statistics cannot be directly calculated from the pooled dataset, meaning that the final aggregated dataset should be interpreted descriptively rather than as a fully model-based pooled estimate, which is a limitation of this report. This reflects a constraint in the current imputation software as well. The package of MICE is well-suited to impute missing values of categorical variables, but it offers limited support for pooling non-regular statistics such as the mode. Future research could explore Bayesian frameworks or custom pooling rules for ordinal categorical variables and incorporate this as a MICE extension.
+
+Finally, we believe that if the dataset would contain very strong predictors for missingness on `hinctnta`, these could be used to make a stronger model to impute the missingness caused by MNAR, it would reduce the missingness bias. It might be useful to add questions to the survey that would, based on theory, strongly correlate with unwillingness to disclose income and in itself be less of a taboo for participants with high or low incomes. These might be implemented in such a way to 'trick' the participants into implicitly disclose their income. More predictor variables for income itself are also useful to make the predictor matrix more robust. Especially in the southern European countries, there were not many predictors with even a moderate correlation to household income. There might be opportunities to find reliable income predicting variables in national census data.
+
+# AI Statement
+The following generative AI tools were used in this project:
+
+ChatGPT was used to collaboratively brainstorm on alternative methodological approaches to our original ideas.
+For R syntax and debugging assistance, Github Copilot was used as collaboration tool, using the Claude Sonnet 4.5 and Gemini 3 Flash models.
+
+All generated text was independently verified by using the cited sources below and all generated code was manually validated and refactored into our personal, familiar syntax.
+
+# References
+Agresti, A. (2010). *Analysis of ordinal categorical data*. John Wiley & Sons.
+
+Bodner, A. D. (2008). What improves with increased counts of multiple imputation? *Structural Equation Modeling: A Multidisciplinary Journal, 15*(4), 651–675. [https://doi.org/10.1080/10705510802339072](https://doi.org/10.1080/10705510802339072)
+
+Bollinger, C. R., Hirsch, B. T., Hokayem, C. M., & Ziliak, J. P. (2019). Trouble in the tails? What we know about earnings nonresponse 30 years after Lillard, Smith, and Welch. *Journal of Political Economy, 127*(5), 2143-2185.
+
+Cochran, W. G. (1977). Sampling techniques. *Johan Wiley & Sons Inc.*
+
+Cohen, J. (1988). *Statistical power analysis for the behavioral sciences.* Routledge.
+
+ESS Sampling and Weighting Expert Panel. (2022, July 4). *European Social Survey Round 11 sampling guidelines: Principles and implementation.* European Social Survey. [https://www.europeansocialsurvey.org/sites/default/files/2023-06/Round-11ESS-sampling-guidelines.pdf](https://www.europeansocialsurvey.org/sites/default/files/2023-06/Round-11ESS-sampling-guidelines.pdf)
+
+European Social Survey. (2019). *ESS Round 9 (2018/2019) technical report.* London, UK: ESS ERIC.
+
+Esping-Andersen, G. (1990). *The Three Worlds of Welfare Capitalism*. Princeton University Press.
+
+Ferrera, M. (1996). The ‘Southern Model’ of welfare in social Europe. *Journal of European Social Policy, 6*(1), 17–37. [https://doi.org/10.1177/095892879600600102](https://doi.org/10.1177/095892879600600102)
+
+Gaffert, P., Meinfelder, F., & Bosch, V. (2016). Towards an MI-proper predictive mean matching. *Survey Research Methods Section, JSM 2018.*
+
+Graham, J. W., Olchowski, A. E., & Gilreath, T. D. (2007). How many imputations are really needed? Some practical clarifications of multiple imputation theory. Prevention science, 8(3), 206-213.
+
+Jowell, R., Roberts, C., Fitzgerald, R., & Eva, G. (2007). *Measuring attitudes cross nationally: Lessons from the European Social Survey*. Sage.
+
+Kaminska, O. (2020). Guide to using weights and sample design indicators with ESS data (Version 1.1) \[PDF\]. European Social Survey. [https://www.europeansocialsurvey.org/sites/default/files/202306/ESS_weighting_data_1_1.pdf](https://www.europeansocialsurvey.org/sites/default/files/202306/ESS_weighting_data_1_1.pdf)
+
+Kim, S., Egerter, S., Cubbin, C., Takahashi, E. R., & Braveman, P. (2007). Potential implications of missing income data in population-based surveys: an example from a postpartum survey in California. *Public health reports, 122*(6), 753-763.
+
+Liddell, T. M., & Kruschke, J. K. (2018). Analyzing ordinal data with metric models: What could possibly go wrong?. *Journal of Experimental Social Psychology, 79*, 328-348.
+
+Little, R. J., & Rubin, D. B. (2002). Statistical analysis with missing data. John Wiley & Sons.
+
+Meng, X. L. (1994). Multiple-imputation inferences with uncongenial sources of input. Statistical science, 538-558.
+
+Palamara, D. R. (2016). Social Status in Norway and the Law of Jante: An Analysis of ISSP Social Inequality Data. *European Journal of Interdisciplinary Studies, 8*(1), 1–21.
+
+Quartagno, M., Carpenter, J. R., & Goldstein, H. (2020). Multiple imputation with survey weights: a multilevel approach. *Journal of Survey Statistics and Methodology, 8*(5), 965-989.
+
+Reiter, J. P., Raghunathan, T. E., & Kinney, S. K. (2006). The importance of modeling the sampling design in multiple imputation for missing data. *Survey methodology, 32*(2), 143.
+
+Robitzsch, A., Grund, S., & Henke, T. (2021). *miceadds: Some additional multiple Imputation functions, especially for “mice”(3.11-6).*
+
+Royston, P. (2004). Multiple imputation of missing values. The Stata Journal, 4(3), 227-241.
+
+Rubin, D. B. (1987). *Multiple imputation for nonresponse in surveys.* Wiley. [https://doi.org/10.1002/9780470316696](https://doi.org/10.1002/9780470316696)
+
+Rubin, D. B. (1988). An overview of multiple imputation. In *Proceedings of the survey research methods section of the American statistical association* (Vol. 79, p. 84).
+
+Schafer, J. L. 1997. *Analysis of Incomplete Multivariate Data.* London: Chapman & Hall.
+
+Schafer, J. L., & Olsen, M. K. (1998). Multiple imputation for multivariate missing-data problems: A data analyst's perspective. *Multivariate behavioral research, 33*(4), 545-571.
+
+Seaman, S. R., White, I. R., Copas, A. J., & Li, L. (2012). Combining multiple imputation and inverse-probability weighting. *Biometrics, 68*(1), 129-137.
+
+Snijders, T. A. B., & Bosker, R. J. (2012). *Multilevel analysis: An introduction to basic and advanced multilevel modeling* (2nd ed.). Sage.
+
+Van Buuren, S. (2018). *Flexible imputation of missing data* (Second edition). CRC Press.
+
+Van Buuren, S., & Groothuis-Oudshoorn, K. (2011). mice: Multivariate imputation by Chained equations in R. *Journal of statistical software, 45*, 1-67.
+
+Zhou, H., Elliott, M. R., & Raghunathan, T. E. (2016). A two-step semiparametric method to accommodate sampling weights in multiple imputation. *Biometrics, 72*(1), 242-252.
