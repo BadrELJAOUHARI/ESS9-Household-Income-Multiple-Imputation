@@ -1,0 +1,23 @@
+# Third-party survey microdata — do not redistribute
+/ess/*.dta
+/ess/*.sav
+/ess/*.csv
+/ess/*.zip
+
+# Quarto output and caches
+/.quarto/
+/report.html
+/report_files/
+/*_cache/
+/*_files/
+
+# Generated evaluation exports
+/output/
+
+# R projects and editor state
+.Rhistory
+.RData
+.Ruserdata
+.Rproj.user/
+.DS_Store
+Thumbs.db
